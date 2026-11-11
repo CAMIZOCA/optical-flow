@@ -9,6 +9,8 @@ type Capture = {
   raw_text: string;
   reviewed_text: string;
   patient_reference: string;
+  name: string;
+  cedula: string;
   created_at: string;
   image_url: string;
 };
@@ -44,6 +46,9 @@ function App() {
   const [captures, setCaptures] = useState<Capture[]>([]);
   const [selectedId, setSelectedId] = useState("");
   const [reference, setReference] = useState("");
+  const [name, setName] = useState("");
+  const [cedula, setCedula] = useState("");
+  const [batchResults, setBatchResults] = useState<{ filename: string; message: string }[]>([]);
   const [reviewedText, setReviewedText] = useState("");
   const [busy, setBusy] = useState("Cargando capturas…");
   const [problem, setProblem] = useState("");
@@ -52,6 +57,8 @@ function App() {
   function select(capture: Capture) {
     setSelectedId(capture.id);
     setReference(capture.patient_reference);
+    setName(capture.name || "");
+    setCedula(capture.cedula || "");
     setReviewedText(capture.reviewed_text || capture.raw_text);
   }
 
@@ -75,7 +82,7 @@ function App() {
       .finally(() => setBusy(""));
   }, []);
 
-  async function perform(label: string, action: () => Promise<void>) {
+  async function perform(label: string, action: () => Promise<unknown>) {
     setBusy(label);
     setProblem("");
     try {
@@ -91,6 +98,7 @@ function App() {
     const result = await api<Capture>(apiUrl + capture.id + "/ocr/", { method: "POST" });
     remember(result);
     if (result.state === "failed") setProblem("El OCR no pudo leer la imagen. Puedes reintentar.");
+    return result;
   }
 
   async function upload(file: Blob, filename: string) {
@@ -98,8 +106,24 @@ function App() {
     body.append("image", file, filename);
     const capture = await api<Capture>(apiUrl, { method: "POST", body });
     remember(capture);
-    setBusy("Extrayendo texto…");
-    await extract(capture);
+    return extract(capture);
+  }
+
+  function uploadBatch(files: File[]) {
+    setBatchResults([]);
+    void perform("Preparando lote…", async () => {
+      for (const [index, file] of files.entries()) {
+        setBusy(`Procesando ${index + 1} de ${files.length} · ${file.name}`);
+        try {
+          const result = await upload(file, file.name);
+          const message = result.state === "failed" ? "Guardada; OCR pendiente de reintento." : "Guardada y lista para revisión.";
+          setBatchResults((current) => [...current, { filename: file.name, message }]);
+        } catch (error) {
+          const message = error instanceof Error ? error.message : "No se pudo procesar esta imagen.";
+          setBatchResults((current) => [...current, { filename: file.name, message }]);
+        }
+      }
+    });
   }
 
   function openExample() {
@@ -116,7 +140,7 @@ function App() {
       const approved = await api<Capture>(apiUrl + capture.id + "/approve/", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ patient_reference: reference, reviewed_text: reviewedText }),
+        body: JSON.stringify({ patient_reference: reference, reviewed_text: reviewedText, name, cedula }),
       });
       remember(approved);
     });
@@ -137,20 +161,25 @@ function App() {
           <div className="actions">
             <button type="button" onClick={openExample} disabled={!!busy}>Probar con un ejemplo</button>
             <label className={"button primary" + (busy ? " disabled" : "")}>
-              Subir imagen
-              <input type="file" accept="image/jpeg,image/png" disabled={!!busy} onChange={(event) => {
-                const file = event.currentTarget.files?.[0];
+              Subir imágenes
+              <input type="file" accept="image/jpeg,image/png" multiple disabled={!!busy} onChange={(event) => {
+                const files = Array.from(event.currentTarget.files || []);
                 event.currentTarget.value = "";
-                if (file) void perform("Subiendo imagen…", () => upload(file, file.name));
+                if (files.length) uploadBatch(files);
               }} />
             </label>
           </div>
         </section>
         {busy && <p className="notice" role="status">{busy}</p>}
         {problem && <p className="notice error" role="alert">{problem}</p>}
+        {batchResults.length > 0 && <details className="card" open>
+          <summary>Resultado del lote · {batchResults.length} imágenes procesadas</summary>
+          <ul>{batchResults.map((result, index) => <li key={index}><strong>{result.filename}</strong> · {result.message}</li>)}</ul>
+        </details>}
         <div className="workspace">
           <aside aria-label="Capturas" className="card">
             <h2>Capturas recientes</h2>
+            <p>Al recargar se muestran las últimas 50.</p>
             {captures.length === 0 && <p className="muted">Aún no hay capturas.</p>}
             {captures.map((capture) => (
               <button key={capture.id} type="button" className="capture-item"
@@ -176,11 +205,21 @@ function App() {
                     <div className="editor">
                       <h3>Revisión aprobada</h3>
                       <p>Referencia: <strong>{selected.patient_reference}</strong></p>
+                      <p>Nombre: <strong>{selected.name || "Sin identificar"}</strong></p>
+                      <p>Cédula: <strong>{selected.cedula || "Sin identificar"}</strong></p>
                       <div className="transcript">{selected.reviewed_text}</div>
                       <a className="button primary" href={selected.image_url + "?download=1"}>Descargar original</a>
                     </div>
                   ) : selected.state === "ready" ? (
                     <form className="editor" onSubmit={(event) => approve(event, selected)}>
+                      <label>Nombre del paciente
+                        <input value={name} onChange={(event) => setName(event.target.value)}
+                          maxLength={160} placeholder="Nombre por revisar" disabled={!!busy} />
+                      </label>
+                      <label>Cédula
+                        <input value={cedula} onChange={(event) => setCedula(event.target.value)}
+                          maxLength={10} inputMode="numeric" pattern="[0-9]{10}" placeholder="Diez dígitos, si están legibles" disabled={!!busy} />
+                      </label>
                       <label>Referencia ficticia del paciente
                         <input value={reference} onChange={(event) => setReference(event.target.value)}
                           maxLength={80} placeholder="DEMO-001" required disabled={!!busy} />

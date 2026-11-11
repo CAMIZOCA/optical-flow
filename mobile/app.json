@@ -1,0 +1,17 @@
+{
+  "expo": {
+    "name": "Optical Flow",
+    "slug": "optical-flow",
+    "version": "0.2.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "ios": {"supportsTablet": true, "bundleIdentifier": "com.marvinbaptista.opticalflow"},
+    "android": {"package": "com.marvinbaptista.opticalflow"},
+    "plugins": [
+      ["expo-camera", {"cameraPermission": "Permite fotografiar las órdenes para digitalizarlas.", "recordAudioAndroid": false}],
+      ["expo-image-picker", {"photosPermission": "Permite seleccionar imágenes de órdenes para digitalizarlas.", "microphonePermission": false}],
+      "expo-sqlite",
+      "expo-secure-store"
+    ]
+  }
+}

@@ -3,5 +3,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends tesseract-ocr t
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
-COPY app.py .
+COPY app.py fields.py ./
 CMD ["flask", "--app", "app", "run", "--host", "0.0.0.0"]

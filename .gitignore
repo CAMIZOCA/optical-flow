@@ -9,3 +9,7 @@ dist/
 data/
 *.sqlite3
 *.sqlite3-*
+mobile/.expo/
+mobile/node_modules/
+mobile/dist/
+mobile/dist-ios/

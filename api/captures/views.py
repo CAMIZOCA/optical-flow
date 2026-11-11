@@ -1,5 +1,6 @@
 import json
 import os
+import re
 from urllib.error import URLError
 from urllib.request import Request, urlopen
 
@@ -24,6 +25,8 @@ def serialize(capture):
         "raw_text": capture.raw_text,
         "reviewed_text": capture.reviewed_text,
         "patient_reference": capture.patient_reference,
+        "name": capture.name,
+        "cedula": capture.cedula,
         "created_at": capture.created_at.isoformat(),
         "image_url": f"/api/captures/{capture.id}/image/",
     }
@@ -68,24 +71,35 @@ def extract(request, capture_id):
 
     with capture.original.open("rb") as original:
         body = original.read()
+    headers = {"Content-Type": capture.image_type}
+    token = os.environ.get("OCR_API_TOKEN", "")
+    if token:
+        headers["Authorization"] = "Bearer " + token
     ocr_request = Request(
         os.environ.get("OCR_URL", "http://127.0.0.1:5000/extract"),
         data=body,
-        headers={"Content-Type": capture.image_type},
+        headers=headers,
         method="POST",
     )
     try:
         with urlopen(ocr_request, timeout=30) as response:
-            text = json.load(response)["text"]
+            result = json.load(response)
+            text = result["text"]
         if not isinstance(text, str) or len(text) > 20_000:
             raise ValueError("Invalid OCR response")
+        name = result.get("name") or ""
+        cedula = result.get("cedula") or ""
+        if not isinstance(name, str) or len(name) > 160:
+            name = ""
+        if not isinstance(cedula, str) or (cedula and not re.fullmatch(r"[0-9]{10}", cedula)):
+            cedula = ""
     except (URLError, OSError, ValueError, KeyError, TypeError):
         Capture.objects.filter(pk=capture_id, state__in=RETRYABLE).update(state=Capture.State.FAILED)
         capture.refresh_from_db()
         return JsonResponse(serialize(capture))
 
     Capture.objects.filter(pk=capture_id, state__in=RETRYABLE).update(
-        state=Capture.State.READY, raw_text=text
+        state=Capture.State.READY, raw_text=text, name=name, cedula=cedula
     )
     capture.refresh_from_db()
     return JsonResponse(serialize(capture))
@@ -100,17 +114,22 @@ def approve(request, capture_id):
             raise ValueError("Expected an object")
         reference = payload.get("patient_reference")
         text = payload.get("reviewed_text")
-        if not isinstance(reference, str) or not isinstance(text, str):
+        name = payload.get("name", capture.name)
+        cedula = payload.get("cedula", capture.cedula)
+        if not all(isinstance(value, str) for value in (reference, text, name, cedula)):
             raise ValueError("Expected strings")
         reference, text = reference.strip(), text.strip()
+        name, cedula = name.strip(), cedula.strip()
     except (ValueError, UnicodeError):
         return error("Envía una referencia y un texto revisado válidos.", 400)
 
     if not 0 < len(reference) <= 80 or not 0 < len(text) <= 20_000:
         return error("La referencia y el texto revisado son obligatorios.", 400)
+    if len(name) > 160 or (cedula and not re.fullmatch(r"[0-9]{10}", cedula)):
+        return error("Revisa el nombre y la cédula. La cédula debe tener diez dígitos o quedar vacía.", 400)
 
     updated = Capture.objects.filter(pk=capture_id, state=Capture.State.READY).update(
-        patient_reference=reference, reviewed_text=text, state=Capture.State.APPROVED
+        patient_reference=reference, reviewed_text=text, name=name, cedula=cedula, state=Capture.State.APPROVED
     )
     if not updated:
         return error("Solo puedes aprobar una captura lista para revisión.", 409)
