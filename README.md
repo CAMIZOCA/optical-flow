@@ -59,6 +59,12 @@ flowchart TD
 
 ## Alcance y siguientes etapas
 
+### Prototipo Expo para Android e iOS
+
+En `mobile/` hay una app Expo para capturar fotos consecutivas sin cerrar la cámara, importar varias imágenes, guardar el original junto con un JPEG optimizado y una miniatura, procesar el OCR de forma secuencial y revisar nombre y cédula en campos separados. Cada foto lleva su estado y un historial de cambios guardados en SQLite del dispositivo. [Instrucciones móviles](mobile/README.md), [plan de trabajo](docs/PLAN_DE_TRABAJO.md), [arquitectura](docs/ARQUITECTURA.md) y [contrato futuro de Laravel](docs/API_CONTRACT.md).
+
+La API OCR para pruebas móviles se activa con `compose.mobile.yaml` y un token. La vinculación a pacientes de Óptica Andina pertenece a la siguiente fase.
+
 La demo funciona localmente con datos sintéticos y carece de cuentas de usuario. Usa la imagen ficticia de `web/public/sample.png` para compartir ejemplos. El [plan de mejoras](docs/plan-de-mejoras.md) organiza las actividades por prioridad e incluye criterios para validar cada etapa, desde las pruebas del flujo actual hasta las integraciones con Android y Laravel.
 
 ## Descripción para portafolio

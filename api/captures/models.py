@@ -17,4 +17,6 @@ class Capture(models.Model):
     raw_text = models.TextField(blank=True)
     reviewed_text = models.TextField(blank=True)
     patient_reference = models.CharField(max_length=80, blank=True)
+    name = models.CharField(max_length=160, blank=True, default="")
+    cedula = models.CharField(max_length=10, blank=True, default="")
     created_at = models.DateTimeField(auto_now_add=True)

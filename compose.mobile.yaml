@@ -1,0 +1,9 @@
+services:
+  ocr:
+    environment:
+      OCR_API_TOKEN: ${OCR_API_TOKEN:?Set OCR_API_TOKEN before starting mobile OCR}
+    ports:
+      - "${OCR_BIND_IP:-127.0.0.1}:5050:5000"
+  api:
+    environment:
+      OCR_API_TOKEN: ${OCR_API_TOKEN:?Set OCR_API_TOKEN before starting mobile OCR}
